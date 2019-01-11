@@ -8,6 +8,10 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+
+install.packages("here")
+install.packages("tidyverse")
+install.packages("dplyr")
 # install.packages("readxl")
 
 library("here")
