@@ -1,0 +1,39 @@
+---
+title: "Degree Day Analysis"
+author: "Xiaoxuan Yang"
+date: "1/11/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# install.packages("readxl")
+
+library("here")
+library("tidyverse")
+library("readxl")
+
+# Set file path
+here::set_here(path = "/Users/xiaoxuanyang/Box Sync/Master Thesis")
+here::here()
+
+```
+
+
+```{r Load raw file}
+###### NG Residential Time Series by States ######
+
+# Download files from EIA website
+  URL <- "https://www.eia.gov/dnav/ng/xls/NG_SUM_LSUM_A_EPG0_VRS_MMCF_M.xls"
+  download.file(URL, destfile = "./data/NG_RES.xls")
+  
+
+  excel_sheets(here("data", "NG_RES.xls"))
+```
+
+
+```{r}
+
+```
+
