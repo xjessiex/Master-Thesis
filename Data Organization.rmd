@@ -15,24 +15,29 @@ knitr::opts_chunk$set(echo = TRUE)
 # install.packages("readxl")
 # install.packages("tempdisagg")
 # install.packages("zoo")
+# install.packages("devtools")
+# devtools::install_github("xjessiex/envutils")
 
 library("here")
 library("tidyverse")
 library("readxl")
 library("tempdisagg")
 library("zoo")
+library("envutils") # for scrapping
 
-# Set file path
-# here::set_here(path = "/Users/xiaoxuanyang/Box Sync/Master Thesis")
+# Set file path with here()
+here::set_here(path = "/Users/xiaoxuanyang/Box Sync/Master Thesis")
 here::here()
 
 ```
 
+## Data Preparation 
+For this research, we are using NG and Electricity sale to the residential sector. The indepedent variables consist of Heating Degree Days, Cooling Degree Days, real GDP, and residential population.
 
-```{r Data Scrapping}
+```{r Data Scrapping for 1990 to 2017}
 ###### NG Residential Sale by States ######
 
-# Download files from EIA website
+# Download NG from EIA website
   URL <- "https://www.eia.gov/dnav/ng/xls/NG_SUM_LSUM_A_EPG0_VRS_MMCF_M.xls"
   download.file(URL, destfile = here("data", "NG_RES.xls"))
 
@@ -40,6 +45,14 @@ here::here()
   NG_Res <- read_excel(here("data", "NG_RES.xls"), 
                        skip = 2, sheet="Data 1")
   NG_Res$Date <- format(as.Date(NG_Res$Date), "%Y-%m") # format year-month
+  
+  Date <- NG_Res$Date[205:541]
+  
+# Filter 1990 to 2017
+  NG_Res <- NG_Res %>%
+    filter(str_detect(Date, "^199|^20")) # filter years with 199x and 20xx
+  
+  saveRDS(NG_Res, here("data", "NG_Res.rds"))
   
 ##### Electricity Residential Sale by States #####
   # URL <- "https://www.eia.gov/electricity/data/state/sales_annual.xlsx"
@@ -57,219 +70,146 @@ here::here()
   Elec_Res <- Elec_Res %>%
     select(Date, State, Megawatthours) %>%
     spread(State, Megawatthours)
+  Elec_Res <- Elec_Res[, c(1,2,3,5,4, 6:ncol(Elec_Res))]
+  Elec_Res <- Elec_Res[, -2]
   
+  saveRDS(Elec_Res, here("data", "Elec_Res.rds"))
   
 ##### CDD Scrapping #####  
-  query_date_CDD <- function(year, month) {
-          month<-as.numeric(month)
-          monstr <- as.character(month.name[month])
-  
-  URL<-"ftp://ftp.cpc.ncep.noaa.gov/htdocs/degree_days/weighted/legacy_files/cooling/statesCONUS/"
-      download_link<-paste0(URL, year, "/", monstr, ".txt")
-      print(download_link)
-      temp<-read.table(download_link, skip = c(15),fill = TRUE)
-  
- 
-      temp<-read.table(download_link, skip = c(15),fill = TRUE)
-      temp<-temp[-c(59:78),]      #delete unnecessary rows
-      temp<-data.frame(lapply(temp, as.character), stringsAsFactors=FALSE)
-
-      # Organizing the headers
-      temp[27,1]<-as.character("NEW HAMPSHIRE")
-        temp[27,c(2:8)]<- temp[27,c(3:9)]
-        temp[27,9]<-temp[28,1]
-      temp[29,1]<-as.character("NEW JERSEY")
-        temp[29,c(2:8)]<- temp[29,c(3:9)]
-        temp[29,9]<-temp[30,1]
-      temp[31,1]<-as.character("NEW MEXICO")
-        temp[31,c(2:8)]<- temp[31,c(3:9)]
-        temp[31,9]<-temp[32,1]
-      temp[33,1]<-as.character("NEW YORK")
-        temp[33,c(2:8)]<- temp[33,c(3:9)]
-        temp[33,9]<-temp[34,1]
-      temp[35,1]<-as.character("NORTH CAROLINA")
-        temp[35,c(2:8)]<- temp[35,c(3:9)]
-        temp[35,9]<-temp[36,1]
-      temp[37,1]<-as.character("NORTH DAKOTA")
-        temp[37,c(2:8)]<- temp[37,c(3:9)]
-        temp[37,9]<-temp[38,1]
-      temp[43,1]<-as.character("RHODE ISLAND")
-        temp[43,c(2:8)]<- temp[43,c(3:9)]
-        temp[43,9]<-temp[44,1]
-      temp[45,1]<-as.character("SOUTH CAROLINA")
-        temp[45,c(2:8)]<- temp[45,c(3:9)]
-        temp[45,9]<-temp[46,1]
-      temp[47,1]<-as.character("SOUTH DAKOTA")
-        temp[47,c(2:8)]<- temp[47,c(3:9)]
-        temp[47,9]<-temp[48,1]
-      temp[55,1]<-as.character("WEST VIRGINIA")
-        temp[55,c(2:8)]<- temp[55,c(3:9)]
-        temp[55,9]<-temp[56,1]
-        
-        temp.sort <-na.omit(temp)
-    
-      x <- as.data.frame(t(temp.sort[1:48,2]))
-      colnames(x)<-temp.sort[,1]
-      return(x)
-}
- 
-  
-  Scrape_CDD <- function(startdate, enddate){
-    datespan <- seq(from=as.Date(startdate), to=as.Date(enddate), by='months')
-    print(paste0("Running scrape CDD: ", startdate, " to ", enddate))
-    
-    months<- seq(from=datespan[1], to=datespan[length(datespan)],by='months')
-    
-    y_1 <- as.integer(format(datespan[1], "%Y"))
-    m_1 <- as.integer(format(datespan[1], "%m"))
-    
-    print(paste("Running Scrapping for: Year", y_1, "Month", m_1))
-    data_1 <- query_date_CDD(year=y_1,
-                         month=m_1)
-    
-    for (i in seq_along(months)[-1]) {
-      y <- as.integer(format(months[i], "%Y"))
-      m <- as.integer(format(months[i], "%m"))
-      
-      print(paste("Running for: Year", y, "Month", m))
-      
-      data_n <- query_date_CDD(month = m,
-                           year = y)
-      
-      data_1 <- rbind(data_1, data_n)
-    }
-    data_1[, "Date"] <- datespan
-    return(data_1)
-  }
-
-CDD <- Scrape_CDD(startdate = "1990-01-01",
-                                        enddate = "2018-12-01")
-CDD$Date <- format(as.Date(CDD$Date), "%Y-%m")
-saveRDS(CDD, here:here("data", "CDD.rds"))
-
+  CDD <- CDD.scrape(startdate = "1990-01-01",
+                    enddate = "2017-12-01")
+  saveRDS(CDD, here("data", "CDD.rds"))
 
 
 ##### HDD Scrapping #####
-  query_date_HDD <- function(year, month) {
-            month<-as.numeric(month)
-            monstr <- as.character(month.name[month])
+  HDD<-HDD.scrape(startdate = "1990-01-01",
+                  enddate = "2017-12-01")
+  saveRDS(HDD, here("data", "HDD.rds"))
+     
     
-  URL<-"ftp://ftp.cpc.ncep.noaa.gov/htdocs/degree_days/weighted/legacy_files/heating/statesCONUS/"
-    download_link<-paste0(URL, year, "/", monstr, ".txt")
-    print(download_link)
-    temp<-read.table(download_link, skip = c(15),fill = TRUE)
+##### Load GDP (chained 2012 dollar) #####
+    # Load 1990-1997 
+    GDP_1997 <- read.csv(here("data", "Real GDP 1990-1997.csv"), header = FALSE)[c(-1:-4),-1]
+    colnames(GDP_1997) <- as.character(unlist(GDP_1997[1,]))
+    GDP_1997 <- GDP_1997[-c(1:2, 54:67), ]
     
-   
-  temp<-read.table(download_link, skip = c(15),fill = TRUE)
-  temp<-temp[-c(59:258),]      #delete unnecessary rows
-  temp<-data.frame(lapply(temp, as.character), stringsAsFactors=FALSE)
-  
-  # Organizing the headers
-  temp[27,1]<-as.character("NEW HAMPSHIRE")
-    temp[27,c(2:8)]<- temp[27,c(3:9)]
-    temp[27,9]<-temp[28,1]
-  temp[29,1]<-as.character("NEW JERSEY")
-    temp[29,c(2:8)]<- temp[29,c(3:9)]
-    temp[29,9]<-temp[30,1]
-  temp[31,1]<-as.character("NEW MEXICO")
-    temp[31,c(2:8)]<- temp[31,c(3:9)]
-    temp[31,9]<-temp[32,1]
-  temp[33,1]<-as.character("NEW YORK")
-    temp[33,c(2:8)]<- temp[33,c(3:9)]
-    temp[33,9]<-temp[34,1]
-  temp[35,1]<-as.character("NORTH CAROLINA")
-    temp[35,c(2:8)]<- temp[35,c(3:9)]
-    temp[35,9]<-temp[36,1]
-  temp[37,1]<-as.character("NORTH DAKOTA")
-    temp[37,c(2:8)]<- temp[37,c(3:9)]
-    temp[37,9]<-temp[38,1]
-  temp[43,1]<-as.character("RHODE ISLAND")
-    temp[43,c(2:8)]<- temp[43,c(3:9)]
-    temp[43,9]<-temp[44,1]
-  temp[45,1]<-as.character("SOUTH CAROLINA")
-    temp[45,c(2:8)]<- temp[45,c(3:9)]
-    temp[45,9]<-temp[46,1]
-  temp[47,1]<-as.character("SOUTH DAKOTA")
-    temp[47,c(2:8)]<- temp[47,c(3:9)]
-    temp[47,9]<-temp[48,1]
-  temp[55,1]<-as.character("WEST VIRGINIA")
-    temp[55,c(2:8)]<- temp[55,c(3:9)]
-    temp[55,9]<-temp[56,1]
+    # Load 1997-2017
+    GDP_2012 <- read.csv(here("data", "Real GDP 1997-.csv"), header = FALSE)[c(-1:-4),-1]
+    colnames(GDP_2012) <- as.character(unlist(GDP_2012[1,]))
+    GDP_2012 <- GDP_2012[-c(1:2, 54:67), ]
     
-    temp.sort <-na.omit(temp)
-  
-    x <- as.data.frame(t(temp.sort[1:48,2]))
-    colnames(x)<-temp.sort[,1]
-    return(x)
-  }
-    
-  # Scraping function
-  
-      Scrape_HDD <- function(startdate, enddate){
-        datespan <- seq(from=as.Date(startdate), to=as.Date(enddate), by='months')
-        print(paste0("Running scrape HDD: ", startdate, " to ", enddate))
-        
-        months<- seq(from=datespan[1], to=datespan[length(datespan)],by='months')
-        
-        y_1 <- as.integer(format(datespan[1], "%Y"))
-        m_1 <- as.integer(format(datespan[1], "%m"))
-        
-        print(paste("Running for: Year", y_1, "Month", m_1))
-        data_1 <- query_date_HDD(year=y_1,
-                             month=m_1)
-        
-        for (i in seq_along(months)[-1]) {
-          y <- as.integer(format(months[i], "%Y"))
-          m <- as.integer(format(months[i], "%m"))
-          
-          print(paste("Running for: Year", y, "Month", m))
-          
-          data_n <- query_date_HDD(month = m,
-                               year = y)
-          
-          data_1 <- rbind(data_1, data_n)
-        }
-        data_1[, "Date"] <- datespan
-        return(data_1)
-      }
-    
-    HDD<-Scrape_HDD(startdate = "1990-01-01",
-                                            enddate = "2018-12-01")
+    # Convert chained 1997 to 2012 for 1990-1997
+    for (i in 1:dim(GDP_1997)[2]){
+      j=2:9
+      GDP_1997[i, j] <- GDP_1997[i, j] * GDP_2012[i,2]/GDP_1997[i,9]
+    }
 
-    saveRDS(HDD, here:here("data", "HDD.rds"))
-   
-    
-    
-    
-##### Load GDP (chained 2009 dollar) #####
-    GDP <- read_xlsx(here("data", "Real GDP 1990-2017 (chained 2009 dollar).xlsx"))
-    GDP <- as.data.frame(t(GDP)) # switch row and column
+    GDP <- t(cbind(GDP_1997, GDP_2012[, -c(1:2)]))
     colnames(GDP) <- as.character(unlist(GDP[1,]))
-    GDP = GDP[-1,] # units in millions$
+    GDP <- GDP[-1,]
+    
+    # Interpolate annual GDP into monthly GDP with Denton-Cholette method
+    df <- as.data.frame(matrix(ncol=0, nrow=336)) # data frame to record the interpolated values
+    for (i in 1:51){
+    statename <- colnames(GDP.a, prefix = "col")[i] # find the state name
+    state.a<-GDP.a[, i]
+    state.a <- as.numeric(state.a)
+    state.a <- ts(state.a)
+    state.m <- as.tibble(predict(td(state.a~1, to= "monthly", method = "denton-cholette", conversion = "average")))
+    colnames(state.m) <- statename
 
+    df <- cbind(df, state.m)
+    }
+    saveRDS(df, here("data","state_monthly_GDP.rds"))
+    
     
 ##### Interpolate Residential Population #####
     # Load an indicator series
     pop_US_mon<-read_xlsx(here("data", "US Monthly Population.xlsx"))[,2]
     us.m<-ts(pop_US_mon, frequency = 12, start = c(1990))
     
-    
     # Read Annual State Population
-    pop_annual<-read.csv(here("data", "State Annual Population.csv"))
-    state.a<-ts(pop_annual, frequency = 1, start=c(1990))
-    
+    pop_annual<-read.csv(here("data", "State Annual Population.csv"))[, -1]
+     
+    df <- as.data.frame(matrix(ncol=0, nrow=336)) # data frame to record the interpolated values
     # Interpolate according to the annual data
-    state.m<-predict(td(state.a~us.m, conversion="average"))
-    
-    saveRDS(state.m, here("data","state_monthly_pop.rds"))
-        
-    
-  
+    for (i in 1:51){
+    statename <- colnames(pop_annual, prefix = "col")[i] # find the state name
+    state.a<-ts(pop_annual[, i], frequency = 1, start=c(1990))
+
+    state.m <- as.tibble(predict(td(state.a~us.m, conversion="average")))
+    colnames(state.m) <- statename
+
+    df <- cbind(df, state.m)
+    }
+      
+    saveRDS(df, here("data","state_monthly_pop.rds"))
     
 ```
 
-
+## Assemble state profile with all variables
 ```{r}
+##### Build State Profiles #####
+
+  # Load Population and eliminate DC, Hawaii and Alaska
+    Pop.m <- readRDS(here("data", "state_monthly_pop.rds"))[, -c(2, 9, 12)]
+  # Load GDP
+    GDP.m <- readRDS(here("data", "state_monthly_GDP.rds"))[, -c(2, 9, 12)]
+  # Load CDD
+    CDD <- readRDS(here("data", "CDD.rds"))[,-1]
+  # Load HDD
+    HDD <- readRDS(here("data", "HDD.rds"))[,-1]
+
+  # Load electricity residential sale
+    Elec_res <- readRDS(here("data", "Elec_Res.rds"))
+    Elec_res[, 2:51] <- lapply(Elec_res[, 2:51], as.numeric)
+    Elec_res <- Elec_res[, 2:51] * 3600 # convert MWh to MJ
+    Elec_res <- Elec_res[, -c(7, 11)]
+    
+  # Load NG residential sale
+    NG_res <- readRDS(here("data", "NG_Res.rds"))[, -c(1:2)]
+    
+    # Download heat contentfiles from EIA website
+    URL <- "https://www.eia.gov/dnav/ng/xls/NG_CONS_HEAT_A_EPG0_VGTH_BTUCF_A.xls"
+    download.file(URL, destfile = here("data", "NG_HC.xls"))
+
+    excel_sheets(here("data", "NG_HC.xls")) # read which excel sheet
+    NG_HC <- read_excel(here("data", "NG_HC.xls"), 
+                       skip = 2, sheet="Data 1")[-c(1:4),-c(1:2)]
+    
+    HC_avg <- t(tibble("Heat Content" = colMeans(NG_HC)))
+    colnames(HC_avg) <- colnames(NG_HC) # set rownames to indicate states
+
+    # Convert MMcf to MMBtu:
+    for (i in 1:51){
+    NG_res[, i] <- NG_res[, i] * HC_avg[, i]
+    }
+    
+    # Convert MMBtu to MJ:
+    NG_res = NG_res[, 1:51] * 0.001055059 * 10^6
+    
+    # Eliminate extra states
+    NG_res = NG_res[, -c(2, 9, 12)]
+    
+  # create profile for each state
+  for (i in 1:48){
+
+     statename <- colnames(Pop.m, prefix = "col")[i]
+    state <- tibble(
+      "Date" = Date[1:336],
+      "Real GDP per capita (millions of chained 2012 dollars per person)" = GDP.m[1:336, i]/Pop.m[1:336, i],
+      "Electricity Sale to Residential Consumers per capita (MJ/person)" = Elec_res[1:336, i]/Pop.m[1:336, i],
+      "Natural Gas Deliveries to Residential Consumers per capita (MJ/person)" = NG_res[1:336, i]/Pop.m[1:336, i],
+      "HDD" = HDD[1:336, i],
+      "CDD" = CDD[1:336, i])
+    
+    # add DD for plotting in the future
+    state[,"DD"] <- state$CDD - state$HDD
+      
+    write.csv(state, here("state", paste0(statename, ".csv")))
+  }
+  
+
 
 ```
 
