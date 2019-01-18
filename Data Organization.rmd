@@ -5,7 +5,7 @@ date: "1/11/2019"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r Setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 
@@ -46,11 +46,10 @@ For this research, we are using NG and Electricity sale to the residential secto
                        skip = 2, sheet="Data 1")
   NG_Res$Date <- format(as.Date(NG_Res$Date), "%Y-%m") # format year-month
   
-  Date <- NG_Res$Date[205:541]
   
-# Filter 1990 to 2017
-  NG_Res <- NG_Res %>%
-    filter(str_detect(Date, "^199|^20")) # filter years with 199x and 20xx
+  NG_Res <- NGres.scrape(startdate = "1990-01", enddate = "2017-12")[, -c(1,2)]
+  
+  Date <- NG_Res$Date
   
   saveRDS(NG_Res, here("data", "NG_Res.rds"))
   
@@ -148,9 +147,7 @@ For this research, we are using NG and Electricity sale to the residential secto
 ```
 
 ## Assemble state profile with all variables
-```{r}
-##### Build State Profiles #####
-
+```{r Build State Profiles}
   # Load Population and eliminate DC, Hawaii and Alaska
     Pop.m <- readRDS(here("data", "state_monthly_pop.rds"))[, -c(2, 9, 12)]
   # Load GDP
@@ -167,7 +164,7 @@ For this research, we are using NG and Electricity sale to the residential secto
     Elec_res <- Elec_res[, -c(7, 11)]
     
   # Load NG residential sale
-    NG_res <- readRDS(here("data", "NG_Res.rds"))[, -c(1:2)]
+    NG_res <- readRDS(here("data", "NG_Res.rds"))
     
     # Download heat contentfiles from EIA website
     URL <- "https://www.eia.gov/dnav/ng/xls/NG_CONS_HEAT_A_EPG0_VGTH_BTUCF_A.xls"
@@ -208,8 +205,5 @@ For this research, we are using NG and Electricity sale to the residential secto
       
     write.csv(state, here("state", paste0(statename, ".csv")))
   }
-  
-
-
 ```
 
