@@ -1,0 +1,44 @@
+---
+title: "Regression Analysis"
+author: "Xiaoxuan Yang"
+date: "1/18/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+# install.packages("here")
+# install.packages("tidyverse")
+# install.packages("dplyr")
+# install.packages("readxl")
+# install.packages("tempdisagg")
+# install.packages("zoo")
+# install.packages("devtools")
+# devtools::install_github("xjessiex/envutils")
+
+library("here")
+library("tidyverse")
+library("readxl")
+library("tempdisagg")
+library("zoo")
+library("envutils") # for scrapping
+
+# Set file path with here()
+here::set_here(path = "/Users/xiaoxuanyang/Box Sync/Master Thesis")
+here::here()
+```
+
+```{r Load state profiles}
+# get filenames for all 48 states
+  list.filesnames<-list.files(here("state"), pattern=".csv")
+  list.data<-list() # create a list
+
+# load all tables into a list  
+  for (i in 1:length(list.filesnames)){
+    list.data[[i]]<-read.csv(here("state", list.filesnames[i]))
+    names(list.data[[i]])<-list.filesnames[i]
+}
+```
+
