@@ -15,8 +15,8 @@ knitr::opts_chunk$set(echo = TRUE)
 # install.packages("readxl")
 # install.packages("tempdisagg")
 # install.packages("zoo")
-# install.packages("devtools")
-# devtools::install_github("xjessiex/envutils")
+ install.packages("devtools")
+devtools::install_github("xjessiex/envutils")
 
 library("here")
 library("tidyverse")
@@ -30,15 +30,59 @@ here::set_here(path = "/Users/xiaoxuanyang/Box Sync/Master Thesis")
 here::here()
 ```
 
+# One regression for all states
 ```{r Load state profiles}
 # get filenames for all 48 states
   list.filesnames<-list.files(here("state"), pattern=".csv")
   list.data<-list() # create a list
+ 
+```
 
-# load all tables into a list  
-  for (i in 1:length(list.filesnames)){
-    list.data[[i]]<-read.csv(here("state", list.filesnames[i]))
-    names(list.data[[i]])<-list.filesnames[i]
-}
+```{r Compile all states}
+  # create a dataframe
+    df<-as.data.frame(matrix(ncol=8, nrow=0))
+  # go through each state
+    for (i in 1:length(list.filesnames)){
+    
+    # add statename as a column
+    statename<-substr(list.filesnames[i],1,nchar(list.filesnames[i])-4)
+    
+    # load data for each state
+    data <- read.csv(here("state", paste0(statename, ".csv")))
+    data[,"State"] = rep(statename, nrow(data))
+    df<-rbind(df, data)
+    }
+
+  # define column names for the compiled file
+     colnames(df)<-c(
+       "Index",
+       "Date", 
+       "Real GDP (millions of chained 2012 dollars) per capita",
+       "Electricity Sale to Residential Consumers per capita (MJ/person)", 
+       "Natural Gas Deliveries to Residential Consumers per capita (MJ/person)", 
+       "HDD",
+       "CDD",
+       "DD",
+       "State")
+     
+     saveRDS(df, here("data", "All_state.rds"))
+```
+
+```{r Make regression}
+data <- readRDS(here("data", "All_state.rds"))
+
+colnames(data)<-c(
+       "Index",
+       "Date", 
+       "GDPpc",
+       "Elecrespc", 
+       "NGrespc", 
+       "HDD",
+       "CDD",
+       "DD",
+       "State")
+
+lm_fit <- lm(Elecrespc ~ DD + I(DD^2) + GDP, data)
+
 ```
 
