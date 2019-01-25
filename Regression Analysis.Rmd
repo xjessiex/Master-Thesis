@@ -8,25 +8,34 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-
+# 
 # install.packages("here")
 # install.packages("tidyverse")
 # install.packages("dplyr")
+# install.packages("tibble")
 # install.packages("readxl")
 # install.packages("tempdisagg")
 # install.packages("zoo")
- install.packages("devtools")
-devtools::install_github("xjessiex/envutils")
+# install.packages("devtools")
+# devtools::install_github("xjessiex/envutils")
+# install.packages("processx")
+# install.packages("colorspace")
+# install.packages("lfe")
+# install.packages("data.table")
 
+library("processx")
+library("colorspace")
 library("here")
 library("tidyverse")
 library("readxl")
 library("tempdisagg")
 library("zoo")
 library("envutils") # for scrapping
+library("lfe")
+library("data.table")
 
 # Set file path with here()
-here::set_here(path = "/Users/xiaoxuanyang/Box Sync/Master Thesis")
+here::set_here(path = "/Users/Jessie Yang/Box Sync/Master Thesis")
 here::here()
 ```
 
@@ -41,17 +50,28 @@ here::here()
 ```{r Compile all states}
   # create a dataframe
     df<-as.data.frame(matrix(ncol=8, nrow=0))
+
   # go through each state
     for (i in 1:length(list.filesnames)){
-    
+      
     # add statename as a column
     statename<-substr(list.filesnames[i],1,nchar(list.filesnames[i])-4)
+    list.filesnames[i]<-substr(list.filesnames[i],1,nchar(list.filesnames[i])-4)
+    
     
     # load data for each state
     data <- read.csv(here("state", paste0(statename, ".csv")))
     data[,"State"] = rep(statename, nrow(data))
     df<-rbind(df, data)
     }
+   
+    saveRDS(list.filesnames, here("data", "statename.rds"))
+
+    
+  # convert date from factor to date
+    df$Date <- as.yearmon(df$Date, "%Y-%m")
+    df$Date <- format(as.Date(df$Date), "%Y-%m")
+    df[, "Year"] <- substring(df$Date,1,4)
 
   # define column names for the compiled file
      colnames(df)<-c(
@@ -63,13 +83,15 @@ here::here()
        "HDD",
        "CDD",
        "DD",
-       "State")
+       "State",
+       "Year")
      
-     saveRDS(df, here("data", "All_state.rds"))
+     saveRDS(df, here("data", "all_state.rds"))
 ```
 
-```{r Make regression}
-data <- readRDS(here("data", "All_state.rds"))
+```{r Make regression with all states}
+data <- readRDS(here("data", "all_state.rds"))
+statename <- readRDS(here("data", "statename.rds"))
 
 colnames(data)<-c(
        "Index",
@@ -80,9 +102,118 @@ colnames(data)<-c(
        "HDD",
        "CDD",
        "DD",
-       "State")
+       "State",
+       "Year")
 
-lm_fit <- lm(Elecrespc ~ DD + I(DD^2) + GDP, data)
 
+##### General lm for all states #####
+  lm_fit <- lm(Elecrespc ~ DD + GDPpc, data)
+  summary(lm_fit)$r.squared
+
+  plot(lm_fit)
+
+##### Elec: State and Year fixed effects #####
+  fedata <- data
+  fedata$Year <- as.factor(fedata$Year)
+  fedata$State <- as.factor(fedata$State)
+  fedata[, "DD2"] <- fedata$DD^2
+   
+  lm_felm <- felm(fedata$Elecrespc ~ fedata$DD + fedata$DD2 + fedata$GDP | fedata$Year + fedata$State)
+  
+  summary(lm_felm)
+
+
+  
+##### NG: State and Year fixed effects #####
+  fngdata <- data
+  fngdata$Year <- as.factor(fngdata$Year)
+  fngdata$State <- as.factor(fngdata$State)
+  fngdata[, "DD2"] <- fngdata$DD^2
+   
+  lm_fnglm <- felm(fngdata$NGrespc ~ fngdata$DD + fngdata$DD2 + fngdata$GDP | fngdata$Year + fngdata$State)
+
+  summary(lm_fnglm)
+  
+
+```
+
+
+```{r Make regression for yearly values}
+  # Load all state files  
+    data <- readRDS(here("data", "all_state.rds"))
+  # Load statenames
+    snames <- readRDS(here("data", "statename.rds"))
+
+  # Create a df to collect regression information
+    df1<-as.data.frame(matrix(ncol=5, nrow=0))
+    
+##### Elec: Annual regression #####
+    type = "Electricity"
+  for (i in 1:length(snames)){
+    statedata <- filter(data, State == statename)
+    statename <-snames[i]
+    for (j in 1990:2017){
+      yeardata <- filter(statedata, Year == j)
+      
+      # Edit column     
+        colnames(yeardata)<-c(
+             "Index",
+             "Date", 
+             "GDPpc",
+             "Elecrespc", 
+             "NGrespc", 
+             "HDD",
+             "CDD",
+             "DD",
+             "State",
+             "Year")
+      
+        yfit <- lm(Elecrespc ~ 
+                     DD + I(DD^2),
+                     data=yeardata)
+      
+      # Collect information
+        a = yfit$coefficients[3]
+        b = yfit$coefficients[2]
+        c = yfit$coefficients[1]
+        
+      # Collect DDmin and Elecmin from the model
+        DDmin= as.numeric(seq(min(yeardata$DD), 
+                            max(yeardata$DD))
+                        [which.min(predict(yfit, newdata = data.frame(DD = seq(min(yeardata$DD), 
+                                                                               max(yeardata$DD)))))])
+        
+        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "DD@min", type, DDmin))))
+      
+        Elecmin = min(yfit$fitted.values)
+        
+        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "Energymin", type, Elecmin))))
+  
+  
+      # Collect curvature
+        k = 2*a
+        
+        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "Curvature", type, k))))
+  
+      # Collect extreme values
+        # Elec @ DDmin
+        DDmin = min(yeardata$DD)
+        Elec_DDmin = a*DDmin^2+b*DDmin+c
+        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "Energy@DDmin", type, Elec_DDmin))))
+    
+        # Elec @ DDmax
+        DDmax = max(data$DD)
+        Elec_DDmax = a*DDmax^2+b*DDmax+c
+        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "Energy@DDmax", type, Elec_DDmax))))
+ 
+        # Check heteroscedasticity
+        hpvalue <- lmtest::bptest(yfit)$p.value
+        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "Breuch Pagan Pvalue", type, hpvalue))))
+      }
+       df1<-rbind(df1,df)
+    }
+    colnames(df1)<-c("State", "Year", "Measurement", "Energy Type", "Value")
+
+    saveRDS(df1, here("data", "elec regression summary.rds"))
 ```
 
