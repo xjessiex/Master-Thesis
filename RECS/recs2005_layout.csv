@@ -1,0 +1,39 @@
+VARIABLE,VARIABLE LABEL,FILE NUMBER,VARIABLE ORDER IN FILE,FORMAT
+SURVEY,Year Survey Conducted,11,1,Numeric
+DOEID,4-digit identification number,11,2,Numeric
+REGIONC,Census Region,11,3,Numeric
+DIVISION,Census Division,11,4,Numeric
+LRGSTATE,Four Largest States,11,5,Numeric
+TYPEHUQ,Type of Home  (Respondent answer),11,6,Numeric
+MQRESULT,Mail Questionnaire Codes,11,7,Numeric
+NWEIGHT,The Final Weight,11,8,Numeric
+HD65,Heat Deg-Days: Base65 01 TO 12-2005 (Inoculated),11,9,Numeric
+CD65,Cool Deg-Days: Base65 01 TO 12-2005 (Inoculated),11,10,Numeric
+KWH,Kilowatt Hours Of Electricity Used,11,11,Numeric
+BTUEL,Electric Annual Use In Thousands Of BTU,11,12,Numeric
+CUFEETNG,CCFS (Hundred Cubic Feet) Of Natural Gas,11,13,Numeric
+BTUNG,Natural Gas Annual Use In Thousands Of BTU,11,14,Numeric
+GALLONFO,Gallons Of Fuel Oil Bought,11,15,Numeric
+BTUFO,Fuel Oil Annual Use In Thousands Of BTU,11,16,Numeric
+GALLONLP,Gallons Of LPG Bought,11,17,Numeric
+BTULP,LPG Annual Use In Thousands Of BTU,11,18,Numeric
+GALLONKR,Gallons Of Kerosene Bought,11,19,Numeric
+BTUKER,Annual Kerosene Use In Thousands Of BTU,11,20,Numeric
+BTUELCDR,Electric Dryer Use (Estimated),11,21,Numeric
+BTUELDWH,Electric Dishwasher Use (Estimated),11,22,Numeric
+BTUELFZZ,Electric Freezer Use (Estimated),11,23,Numeric
+BTUELRFG,Electric Refrigerator Use (Estimated),11,24,Numeric
+BTUELCOL,Electric AC Use (Estimated),11,25,Numeric
+BTUELWTH,Electric Water Heat Use (Estimated),11,26,Numeric
+BTUELSPH,Electric Space Heat Use (Estimated),11,27,Numeric
+BTUELAPL,Electric Appliance Use (Estimated),11,28,Numeric
+BTUNGAPL,Natural Gas Appliance Use (Estimated),11,29,Numeric
+BTUNGWTH,Natural Gas Water Heat Use (Estimated),11,30,Numeric
+BTUNGSPH,Natural Gas Space Heat Use (Estimated),11,31,Numeric
+BTUFOAPL,Fuel Oil Appliance Use (Estimated),11,32,Numeric
+BTUFOSPH,Fuel Oil Space Heat Use (Estimated),11,33,Numeric
+BTUFOWTH,Fuel Oil Water Heat Use (Estimated),11,34,Numeric
+BTULPAPL,LPG Appliance Use (Estimated),11,35,Numeric
+BTULPSPH,LPG Space Heat Use (Estimated),11,36,Numeric
+BTULPWTH,LPG Water Heat Use (Estimated),11,37,Numeric
+BTUWOOD,Annual Wood Consumption Thousands BTU,11,38,Numeric
