@@ -18,44 +18,51 @@ knitr::opts_chunk$set(echo = TRUE)
 # install.packages("devtools")
 # devtools::install_github("xjessiex/envutils")
 
+
 library("here")
 library("tidyverse")
 library("readxl")
 library("tempdisagg")
 library("zoo")
 library("envutils") # for scrapping
+library("datasets") # for state names
+
 
 # Set file path with here()
-here::set_here(path = "/Users/xiaoxuanyang/Box Sync/Master Thesis")
 here::here()
-
 ```
 
 ## Data Preparation 
 For this research, we are using NG and Electricity sale to the residential sector. The indepedent variables consist of Heating Degree Days, Cooling Degree Days, real GDP, and residential population.
 
 ```{r Data Scrapping for 1990 to 2017}
+
+  # Load State Names
+    statenames <- state.name[-c(2,11)]
+
+
 ###### NG Residential Sale by States ######
 
 # Download NG from EIA website
   URL <- "https://www.eia.gov/dnav/ng/xls/NG_SUM_LSUM_A_EPG0_VRS_MMCF_M.xls"
-  download.file(URL, destfile = here("data", "NG_RES.xls"))
+  download.file(URL, destfile = here("data", "NG_Res.xls"), mode="wb")
 
-  excel_sheets(here("data", "NG_RES.xls")) # read which excel sheet
+  # ! Have trouble openning the file from URL ! #
+  excel_sheets(here("data", "NG_Res.xls")) # read which excel sheet
   NG_Res <- read_excel(here("data", "NG_RES.xls"), 
                        skip = 2, sheet="Data 1")
   NG_Res$Date <- format(as.Date(NG_Res$Date), "%Y-%m") # format year-month
   
-  
+  # Option to use 
   NG_Res <- NGres.scrape(startdate = "1990-01", enddate = "2017-12")[, -c(1,2)]
   
-  Date <- NG_Res$Date
+  Date <- NG_Res$Date[205:540]
   
   saveRDS(NG_Res, here("data", "NG_Res.rds"))
   
 ##### Electricity Residential Sale by States #####
-  # URL <- "https://www.eia.gov/electricity/data/state/sales_annual.xlsx"
-  # download.file(URL, destfile = here("data", "Elec_RES.xlsx"))
+  URL <- "https://www.eia.gov/electricity/data/state/sales_annual.xlsx"
+  download.file(URL, destfile = here("data", "Elec_Res.xlsx"), mode="wb")
 
   
   Elec_Res <- read_xlsx(here("data", "Electricity Monthly Sale.xlsx"))[, 1:6]
@@ -119,7 +126,7 @@ For this research, we are using NG and Electricity sale to the residential secto
 
     df <- cbind(df, state.m)
     }
-    saveRDS(df, here("data","state_monthly_GDP.rds"))
+    saveRDS(df, here("data","state_mon_GDP.rds"))
     
     
 ##### Interpolate Residential Population #####
@@ -142,20 +149,23 @@ For this research, we are using NG and Electricity sale to the residential secto
     df <- cbind(df, state.m)
     }
       
-    saveRDS(df, here("data","state_monthly_pop.rds"))
+    saveRDS(df, here("data","state_mon_pop.rds"))
     
 ```
 
 ## Assemble state profile with all variables
 ```{r Build State Profiles}
   # Load Population and eliminate DC, Hawaii and Alaska
-    Pop.m <- readRDS(here("data", "state_monthly_pop.rds"))[, -c(2, 9, 12)]
+    Pop.m <- readRDS(here("data", "state_mon_pop.rds"))[, -c(2, 9, 12)]
   # Load GDP
-    GDP.m <- readRDS(here("data", "state_monthly_GDP.rds"))[, -c(2, 9, 12)]
+    GDP.m <- readRDS(here("data", "state_mon_GDP.rds"))[, -c(2, 9, 12)]
   # Load CDD
     CDD <- readRDS(here("data", "CDD.rds"))[,-1]
   # Load HDD
     HDD <- readRDS(here("data", "HDD.rds"))[,-1]
+    
+  # Load State Names
+    statenames <- state.name[-c(2,11)]
 
   # Load electricity residential sale
     Elec_res <- readRDS(here("data", "Elec_Res.rds"))
@@ -168,7 +178,7 @@ For this research, we are using NG and Electricity sale to the residential secto
     
     # Download heat contentfiles from EIA website
     URL <- "https://www.eia.gov/dnav/ng/xls/NG_CONS_HEAT_A_EPG0_VGTH_BTUCF_A.xls"
-    download.file(URL, destfile = here("data", "NG_HC.xls"))
+    download.file(URL, destfile = here("data", "NG_HC.xls"), mode="wb")
 
     excel_sheets(here("data", "NG_HC.xls")) # read which excel sheet
     NG_HC <- read_excel(here("data", "NG_HC.xls"), 
@@ -179,31 +189,31 @@ For this research, we are using NG and Electricity sale to the residential secto
 
     # Convert MMcf to MMBtu:
     for (i in 1:51){
-    NG_res[, i] <- NG_res[, i] * HC_avg[, i]
-    }
-    
-    # Convert MMBtu to MJ:
-    NG_res = NG_res[, 1:51] * 0.001055059 * 10^6
-    
-    # Eliminate extra states
-    NG_res = NG_res[, -c(2, 9, 12)]
+      NG_res[, i] <- NG_res[, i] * HC_avg[, i]
+      }
+      
+      # Convert MMBtu to MJ:
+      NG_res = NG_res[, 1:51] * 0.001055059 * 10^6
+      
+      # Eliminate extra states
+      NG_res = NG_res[, -c(2, 9, 12)]
     
   # create profile for each state
-  for (i in 1:48){
-
-     statename <- colnames(Pop.m, prefix = "col")[i]
-    state <- tibble(
-      "Date" = Date[1:336],
-      "Real GDP per capita (millions of chained 2012 dollars per person)" = GDP.m[1:336, i]/Pop.m[1:336, i],
-      "Electricity Sale to Residential Consumers per capita (MJ/person)" = Elec_res[1:336, i]/Pop.m[1:336, i],
-      "Natural Gas Deliveries to Residential Consumers per capita (MJ/person)" = NG_res[1:336, i]/Pop.m[1:336, i],
-      "HDD" = HDD[1:336, i],
-      "CDD" = CDD[1:336, i])
-    
-    # add DD for plotting in the future
-    state[,"DD"] <- state$CDD - state$HDD
+    for (i in 1:48){
       
-    write.csv(state, here("state", paste0(statename, ".csv")))
-  }
+      state <- tibble(
+        "Date" = Date[1:336],
+        "Real GDP per capita (millions of chained 2012 dollars per person)" = GDP.m[1:336, i]/Pop.m[1:336, i],
+        "Electricity Sale to Residential Consumers per capita (MJ/person)" = Elec_res[1:336, i]/Pop.m[1:336, i],
+        "Natural Gas Deliveries to Residential Consumers per capita (MJ/person)" = NG_res[1:336, i]/Pop.m[1:336, i],
+        "HDD" = HDD[1:336, i],
+        "CDD" = CDD[1:336, i])
+      
+      # add DD for plotting in the future
+      state[,"DD"] <- state$CDD - state$HDD
+      statename <- statenames[i]
+        
+      write.csv(state, here("state", paste0(statename, ".csv")))
+    }
 ```
 
