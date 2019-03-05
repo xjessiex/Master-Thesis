@@ -22,7 +22,10 @@ knitr::opts_chunk$set(echo = TRUE)
 # install.packages("colorspace")
 # install.packages("lfe")
 # install.packages("data.table")
+# install.packages("tseries")
+# install.packages("lmtest")
 
+library("lmtest")
 library("processx")
 library("colorspace")
 library("here")
@@ -33,13 +36,18 @@ library("zoo")
 library("envutils") # for scrapping
 library("lfe")
 library("data.table")
+library("tseries")
+library("datasets")
+library("DT")
+
 
 # Set file path with here()
-here::set_here(path = "/Users/Jessie Yang/Box Sync/Master Thesis")
+# setwd("/Users/Jessie Yang/Box Sync/Master Thesis")
+# set_here(path = "C:/Users/xy77/Box Sync/Master Thesis")
 here::here()
+
 ```
 
-# One regression for all states
 ```{r Load state profiles}
 # get filenames for all 48 states
   list.filesnames<-list.files(here("state"), pattern=".csv")
@@ -61,7 +69,11 @@ here::here()
     
     # load data for each state
     data <- read.csv(here("state", paste0(statename, ".csv")))
-    data[,"State"] = rep(statename, nrow(data))
+    
+    # Organize statenames
+    snames <- state.name[-c(2,11)]
+    
+    data[,"State"] = rep(snames[i], nrow(data))
     df<-rbind(df, data)
     }
    
@@ -70,7 +82,7 @@ here::here()
     
   # convert date from factor to date
     df$Date <- as.yearmon(df$Date, "%Y-%m")
-    df$Date <- format(as.Date(df$Date), "%Y-%m")
+    df$Date <- as.Date(df$Date)
     df[, "Year"] <- substring(df$Date,1,4)
 
   # define column names for the compiled file
@@ -138,23 +150,26 @@ colnames(data)<-c(
 ```
 
 
-```{r Make regression for yearly values}
+```{r Make regression for yearly values and abstract characteristics of the curve}
   # Load all state files  
     data <- readRDS(here("data", "all_state.rds"))
   # Load statenames
-    snames <- readRDS(here("data", "statename.rds"))
+    snames <- state.name[-c(2,11)]
 
   # Create a df to collect regression information
-    df1<-as.data.frame(matrix(ncol=5, nrow=0))
+    df<-as.data.frame(matrix(ncol=5, nrow=0))
     
 ##### Elec: Annual regression #####
     type = "Electricity"
   for (i in 1:length(snames)){
-    statedata <- filter(data, State == statename)
+
+    
     statename <-snames[i]
+    statedata <- filter(data, State == statename)
+    
     for (j in 1990:2017){
+
       yeardata <- filter(statedata, Year == j)
-      
       # Edit column     
         colnames(yeardata)<-c(
              "Index",
@@ -168,10 +183,96 @@ colnames(data)<-c(
              "State",
              "Year")
       
-        yfit <- lm(Elecrespc ~ 
+ 
+        yfit <- lm(Elecrespc ~ DD + I(DD^2),
+                   data = yeardata)
+        
+      # Collect information
+        a = yfit$coefficients[3]
+        b = yfit$coefficients[2]
+        c = yfit$coefficients[1]
+
+      # Collect DDmin@Elecmin and Elecmin from the model
+        DDmin= as.numeric(seq(min(yeardata$DD), 
+                            max(yeardata$DD))
+                        [which.min(predict(yfit, newdata = data.frame(DD = seq(min(yeardata$DD), 
+                                                                               max(yeardata$DD)))))])
+        
+        df<-rbindlist(list(df, 
+                           as.list(c(as.character(statename), j, "DD at lowest electricity consumption", type, DDmin))))
+
+        Elecmin = min(yfit$fitted.values)
+
+        df<-rbindlist(list(df, 
+                           as.list(c(as.character(statename), j, "Lowest electricity consumption", type, Elecmin))))
+
+
+      # Collect curvature
+        k = 2*a
+
+        df<-rbindlist(list(df, 
+                           as.list(c(as.character(statename), j, "Curvature", type, k))))
+
+      # Collect extreme values
+      # Elec @ DDmin
+      DDmin = min(yeardata$DD)
+      Elec_DDmin = a*DDmin^2+b*DDmin+c
+      df<-rbindlist(list(df, 
+                         as.list(c(as.character(statename), j, "Electricity consumption at lowest DD", type, Elec_DDmin))))
+      df<-rbindlist(list(df,
+                         as.list(c(as.character(statename), j, "DDmin", type, DDmin))))
+      
+      # Elec @ DDmax
+      DDmax = max(yeardata$DD)
+      Elec_DDmax = a*DDmax^2+b*DDmax+c
+      df<-rbindlist(list(df, 
+                         as.list(c(as.character(statename), j, "Electricity consumption at highest DD", type, Elec_DDmax))))
+      df<-rbindlist(list(df,
+                         as.list(c(as.character(statename), j, "DDmax", type, DDmax))))
+
+      
+      }
+    }
+    
+    colnames(df)<-c("State", "Year", "Measurement", "Energy Type", "Value")
+
+    saveRDS(df, here("data", "Electricity Regression Summary.rds"))
+    
+    write.csv(df, here("data", "Electricity Regression Summary.csv"))
+    
+    
+##### NG: Annual regression #####
+    df <-as.data.frame(matrix(ncol=5, nrow=0))
+    type = "Natural Gas"
+  
+  for (i in 1:length(snames)){
+    statedata <- filter(data, State == statename)
+    statename <-snames[i]
+    
+  for (j in 1990:2017){
+    yeardata <- filter(statedata, Year == j)
+    
+      
+      # Edit column     
+        colnames(yeardata)<-c(
+             "Index",
+             "Date", 
+             "GDPpc",
+             "Elecrespc", 
+             "NGrespc", 
+             "HDD",
+             "CDD",
+             "DD",
+             "State",
+             "Year")
+        
+        
+        
+        yfit <- lm(NGrespc ~ 
                      DD + I(DD^2),
                      data=yeardata)
-      
+        
+        
       # Collect information
         a = yfit$coefficients[3]
         b = yfit$coefficients[2]
@@ -183,11 +284,11 @@ colnames(data)<-c(
                         [which.min(predict(yfit, newdata = data.frame(DD = seq(min(yeardata$DD), 
                                                                                max(yeardata$DD)))))])
         
-        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "DD@min", type, DDmin))))
+        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "DD at lowest NG consumption", type, DDmin))))
       
-        Elecmin = min(yfit$fitted.values)
+        NGmin = min(yfit$fitted.values)
         
-        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "Energymin", type, Elecmin))))
+        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "Lowest NG consumption", type, NGmin))))
   
   
       # Collect curvature
@@ -198,22 +299,358 @@ colnames(data)<-c(
       # Collect extreme values
         # Elec @ DDmin
         DDmin = min(yeardata$DD)
-        Elec_DDmin = a*DDmin^2+b*DDmin+c
-        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "Energy@DDmin", type, Elec_DDmin))))
+        NG_DDmin = a*DDmin^2+b*DDmin+c
+        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "NG consumption at lowest DD", type, NG_DDmin))))
+        
+        df<-rbindlist(list(df,
+                         as.list(c(as.character(statename), j, "DDmin", type, DDmin))))
     
         # Elec @ DDmax
-        DDmax = max(data$DD)
-        Elec_DDmax = a*DDmax^2+b*DDmax+c
-        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "Energy@DDmax", type, Elec_DDmax))))
+        DDmax = max(yeardata$DD)
+        NG_DDmax = a*DDmax^2+b*DDmax+c
+        df<-rbindlist(list(df, 
+                           as.list(c(as.character(statename), j, "NG consumption at highest DD", type, NG_DDmax))))
+        df<-rbindlist(list(df,
+                           as.list(c(as.character(statename), j, "DDmax", type, DDmax))))
  
-        # Check heteroscedasticity
-        hpvalue <- lmtest::bptest(yfit)$p.value
-        df<-rbindlist(list(df, as.list(c(as.character(statename), j, "Breuch Pagan Pvalue", type, hpvalue))))
+       
       }
-       df1<-rbind(df1,df)
     }
-    colnames(df1)<-c("State", "Year", "Measurement", "Energy Type", "Value")
+    colnames(df)<-c("State", "Year", "Measurement", "Energy Type", "Value")
 
-    saveRDS(df1, here("data", "elec regression summary.rds"))
+    saveRDS(df, here("data", "NG Regression Summary.rds"))
+    
+    write.csv(df, here("data", "NG Regression Summary.csv"))
+    
 ```
+
+
+```{r Residual Tests}
+
+ # Load all state files  
+    data <- readRDS(here("data", "all_state.rds"))
+  # Load statenames
+    snames <- state.name[-c(2,11)]
+    
+  # test 
+    test <- as.data.frame(matrix(ncol=4, nrow=0))
+##### Elec: Annual regression #####
+    type = "Electricity"
+  for (i in 1:length(snames)){
+  
+    statename <- snames[i]
+    statedata <- filter(data, State == statename)
+    
+    for (j in 1990:2017){
+      
+      yeardata <- filter(statedata, Year == j)
+      # Edit column     
+        colnames(yeardata)<-c(
+             "Index",
+             "Date", 
+             "GDPpc",
+             "Elecrespc", 
+             "NGrespc", 
+             "HDD",
+             "CDD",
+             "DD",
+             "State",
+             "Year")
+      
+
+    
+        yfit <- lm(Elecrespc ~ 
+                     DD + I(DD^2)+ GDPpc,
+                     data=yeardata)
+        
+        # Check violation of independence 
+        # DW stats should be between 0.449 and 1.575 (Savin and White)
+        library(car)
+        dwtest <- durbinWatsonTest(yfit$residuals) 
+        
+        # # Check homoscedasticity
+        # par(mfrow=c(2,2)) # init 4 charts in 1 panel
+        # plot(yfit)
+        bptest <- lmtest::bptest(yfit)$p.value
+        
+        plot(yfit$residuals)
+      
+        # Possible tests
+        # boxtest <- Box.test(yfit$residuals, type = c("Ljung-Box"))$p.value
+        # adftest <- adf.test(yfit$residuals)$p.value
+        # kpsstest <- kpss.test(yfit$residuals)$p.value
+        
+      
+        # test <- rbindlist(list(test, as.list(c(as.character(statename), j, "Ljung Box", boxtest))))
+        # test <- rbindlist(list(test, as.list(c(as.character(statename), j, "ADF", adftest))))
+        test <- rbindlist(list(test, as.list(c(as.character(statename), j, "bptest", bptest))))
+        test <- rbindlist(list(test, as.list(c(as.character(statename), j, "DWtest", dwtest))))
+
+     
+      }
+    }
+
+```
+
+
+```{r Combine quadratic summary}
+elec <- readRDS(here("data", "elec regression summary.rds"))
+NG <- readRDS(here("data", "NG regression summary.rds"))
+
+quadratic_all <- rbind(elec, NG)
+
+saveRDS(quadratic_all, here("data", "all regression summary.rds"))
+```
+
+
+```{r Curve characteristics}
+##### Electricity curve #####
+
+# Create a file to store data
+  elecdf <- as.data.frame(matrix(ncol=5, nrow=0)) #col: state, energy type, characteristics, slope, p value
+
+
+# Load electricity regression summary
+  elecreg <- readRDS(here("data", "Electricity Regression Summary.rds"))
+
+  colnames(elecreg) <- c("state", "year", "measurement", "energytype", "value")
+
+# Load statenames
+    snames <- state.name[-c(2,11)]
+
+for (i in 1:48){
+
+  statename <- snames[i]
+  
+  # filter statedate
+  statedata <- subset(elecreg, state == statename)
+  statedata$year <- as.numeric(statedata$year)
+  
+  # regress DD
+  DD_lowelec <- subset(statedata, measurement == "DD at lowest electricity consumption")
+  lm_fit1 <- lm(value ~ year, 
+                      data = DD_lowelec)
+  elecdf<-rbindlist(list(elecdf, as.list(c(as.character(statename),
+                                     "electricity",
+                                     "DD at lowest energy use", 
+                                     as.numeric(coefficients(lm_fit1)[2]), 
+                                     as.numeric(summary(lm_fit1)$coefficients[2,4]) ))))
+  
+  
+  lowelec <- subset(statedata, measurement == "Lowest electricity consumption")
+  lm_fit2 <- lm(value ~ year, 
+                      data = lowelec)
+  elecdf<-rbindlist(list(elecdf, as.list(c(as.character(statename),
+                                     "electricity",
+                                     "lowest energy use", 
+                                     as.numeric(coefficients(lm_fit2)[2]), 
+                                     as.numeric(summary(lm_fit2)$coefficients[2,4]) ))))
+  
+  curvature <- subset(statedata, measurement == "Curvature")
+  lm_fit3 <- lm(value ~ year, 
+                      data = curvature)
+  elecdf<-rbindlist(list(elecdf, as.list(c(as.character(statename),
+                                     "electricity",
+                                     "curvature", 
+                                     as.numeric(coefficients(lm_fit3)[2]), 
+                                     as.numeric(summary(lm_fit3)$coefficients[2,4]) ))))
+  
+  lowDD <- subset(statedata, measurement == "Electricity consumption at lowest DD")
+  lm_fit4 <- lm(value ~ year, 
+                      data = lowDD)
+  elecdf<-rbindlist(list(elecdf, as.list(c(as.character(statename),
+                                     "electricity",
+                                     "energy use at lowest DD", 
+                                     as.numeric(coefficients(lm_fit4)[2]), 
+                                     as.numeric(summary(lm_fit4)$coefficients[2,4]) ))))
+  
+  DDmin <- subset(statedata, measurement == "DDmin")
+  lm_fit5 <- lm(value ~ year, 
+                      data = DDmin)
+  elecdf<-rbindlist(list(elecdf, as.list(c(as.character(statename),
+                                     "electricity",
+                                     "DDmin", 
+                                     as.numeric(coefficients(lm_fit5)[2]), 
+                                     as.numeric(summary(lm_fit5)$coefficients[2,4]) ))))
+  
+  highDD <- subset(statedata, measurement == "Electricity consumption at highest DD")
+  lm_fit6 <- lm(value ~ year, 
+                      data = highDD)
+  elecdf<-rbindlist(list(elecdf, as.list(c(as.character(statename),
+                                     "electricity",
+                                     "energy use at highest DD", 
+                                     as.numeric(coefficients(lm_fit6)[2]), 
+                                     as.numeric(summary(lm_fit6)$coefficients[2,4]) ))))
+  
+  DDmax <- subset(statedata, measurement == "DDmax")
+  lm_fit7 <- lm(value ~ year, 
+                      data = DDmax)
+  elecdf<-rbindlist(list(elecdf, as.list(c(as.character(statename),
+                                     "electricity",
+                                     "DDmax", 
+                                     as.numeric(coefficients(lm_fit7)[2]), 
+                                     as.numeric(summary(lm_fit7)$coefficients[2,4]) ))))
+
+}
+    colnames(elecdf) <- c("state", "energy type", "characteristics", "slope", "pvalue")
+    
+    
+    # add pvalue table
+    elecdf2 <- elecdf[, c(1,2,3,5)]
+    pvalue_elec <- elecdf2 %>%
+    spread(`characteristics`, `pvalue`)
+  
+    datatable(pvalue_elec) %>%
+    formatStyle(
+      3:9, 
+      backgroundColor = styleInterval(c(0.05), c("orange", "grey"))
+    )
+    
+    # add slope table
+    elecdf3 <- elecdf[, c(1,2,3,4)]
+    slope_elec <- elecdf3 %>%
+    spread(`characteristics`, `slope`)
+  
+    datatable(slope_elec) %>%
+    formatStyle(
+      3:9, 
+      backgroundColor = styleInterval(c(0.05), c("orange", "grey"))
+    )
+    
+    write.csv(slope_elec, here("data", "electricity curve slope.csv"))
+
+    write.csv(pvalue_elec, here("data", "electricity curve pvalue.csv"))
+    
+    saveRDS(elecdf, here("data", "Electricity Curve Summary.rds"))
+    
+
+##### NG curve #####
+
+# Create a file to store data
+  NGdf <- as.data.frame(matrix(ncol=5, nrow=0)) #col: state, energy type, characteristics, slope, p value
+
+
+# Load electricity regression summary
+  NGreg <- readRDS(here("data", "NG Regression Summary.rds"))
+
+  colnames(NGreg) <- c("state", "year", "measurement", "energytype", "value")
+
+# Load statenames
+    snames <- state.name[-c(2,11)]
+
+for (i in 1:48){
+
+  statename <- snames[i]
+  
+  # filter statedate
+  statedata <- subset(NGreg, state == statename)
+  statedata$year <- as.numeric(statedata$year)
+  
+  # regress DD
+  DD_lowNG <- subset(statedata, measurement == "DD at lowest NG consumption")
+  lm_fit1 <- lm(value ~ year, 
+                      data = DD_lowNG)
+  NGdf<-rbindlist(list(NGdf, as.list(c(as.character(statename),
+                                     "NG",
+                                     "DD at lowest energy use", 
+                                     as.numeric(coefficients(lm_fit1)[2]), 
+                                     as.numeric(summary(lm_fit1)$coefficients[2,4]) ))))
+  
+  
+  lowNG <- subset(statedata, measurement == "Lowest NG consumption")
+  lm_fit2 <- lm(value ~ year, 
+                      data = lowNG)
+  NGdf<-rbindlist(list(NGdf, as.list(c(as.character(statename),
+                                     "NG",
+                                     "lowest energy use", 
+                                     as.numeric(coefficients(lm_fit2)[2]), 
+                                     as.numeric(summary(lm_fit2)$coefficients[2,4]) ))))
+  
+  curvature <- subset(statedata, measurement == "Curvature")
+  lm_fit3 <- lm(value ~ year, 
+                      data = curvature)
+  NGdf<-rbindlist(list(NGdf, as.list(c(as.character(statename),
+                                     "NG",
+                                     "curvature", 
+                                     as.numeric(coefficients(lm_fit3)[2]), 
+                                     as.numeric(summary(lm_fit3)$coefficients[2,4]) ))))
+  
+  lowDD <- subset(statedata, measurement == "NG consumption at lowest DD")
+  lm_fit4 <- lm(value ~ year, 
+                      data = lowDD)
+  NGdf<-rbindlist(list(NGdf, as.list(c(as.character(statename),
+                                     "NG",
+                                     "energy use at lowest DD", 
+                                     as.numeric(coefficients(lm_fit4)[2]), 
+                                     as.numeric(summary(lm_fit4)$coefficients[2,4]) ))))
+  
+  DDmin <- subset(statedata, measurement == "DDmin")
+  lm_fit5 <- lm(value ~ year, 
+                      data = DDmin)
+  NGdf<-rbindlist(list(NGdf, as.list(c(as.character(statename),
+                                     "NG",
+                                     "DDmin", 
+                                     as.numeric(coefficients(lm_fit5)[2]), 
+                                     as.numeric(summary(lm_fit5)$coefficients[2,4]) ))))
+  
+  highDD <- subset(statedata, measurement == "NG consumption at highest DD")
+  lm_fit6 <- lm(value ~ year, 
+                      data = highDD)
+  NGdf<-rbindlist(list(NGdf, as.list(c(as.character(statename),
+                                     "NG",
+                                     "energy use at highest DD", 
+                                     as.numeric(coefficients(lm_fit6)[2]), 
+                                     as.numeric(summary(lm_fit6)$coefficients[2,4]) ))))
+  
+  DDmax <- subset(statedata, measurement == "DDmax")
+  lm_fit7 <- lm(value ~ year, 
+                      data = DDmax)
+  NGdf<-rbindlist(list(NGdf, as.list(c(as.character(statename),
+                                     "NG",
+                                     "DDmax", 
+                                     as.numeric(coefficients(lm_fit7)[2]), 
+                                     as.numeric(summary(lm_fit7)$coefficients[2,4]) ))))
+
+}
+  
+  
+  
+    colnames(NGdf) <- c("state", "energy type", "characteristics", "slope", "pvalue")
+    
+    
+    # add pvalue table
+    NGdf2 <- NGdf[, c(1,2,3,5)]
+    pvalue_NG <- NGdf2 %>%
+    spread(`characteristics`, `pvalue`)
+  
+    datatable(pvalue_NG) %>%
+    formatStyle(
+      3:9, 
+      backgroundColor = styleInterval(c(0.05), c("orange", "grey"))
+    )
+    
+    # add slope table
+    NGdf3 <- NGdf[, c(1,2,3,4)]
+    slope_NG <- NGdf3 %>%
+    spread(`characteristics`, `slope`)
+  
+    datatable(slope_NG) %>%
+    formatStyle(
+      3:9, 
+      backgroundColor = styleInterval(c(0.05), c("orange", "grey"))
+    )
+    
+    
+    
+    write.csv(pvalue_NG, here("data", "NG curve pvalue.csv"))
+    write.csv(slope_NG, here("data", "NG curve slope.csv"))
+
+    saveRDS(NGdf, here("data", "NG Curve Summary.rds"))
+        
+    
+    compile <- rbind(elecdf, NGdf)
+    write.csv(compile, here("data", "Curve Summary.csv"))
+```
+
+
 
