@@ -1,0 +1,17 @@
+---
+title: "Data Visualization"
+author: "Xiaoxuan Yang"
+date: "January 25, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ 
+install.packages("rsconnect")
+rsconnect::setAccountInfo(name='xjessiex', 
+                          token='F4AC99EB6C428C3A7A8A332CA0D7ED8F',
+                          secret='HQ/36Z7PQcwfD/gq+LheQujNjeB2PXeWekvTN3Uk')
+
+library("rsconnect")
+```
